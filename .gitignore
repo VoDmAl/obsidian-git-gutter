@@ -1,0 +1,15 @@
+# node
+node_modules/
+npm-debug.log*
+
+# build artifact — published via GitHub Releases, not tracked in source
+main.js
+*.js.map
+
+# editors
+.DS_Store
+.vscode/
+.idea/
+
+# obsidian local install symlink (if dogfooding via ln -s into vault)
+test-vault/

@@ -1,0 +1,10 @@
+{
+  "id": "git-gutter",
+  "name": "Git Gutter",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Highlights uncommitted (added/modified) lines vs HEAD in the editor gutter, VS Code style.",
+  "author": "Dmitry Vorobyev",
+  "authorUrl": "https://github.com/vodmal",
+  "isDesktopOnly": true
+}

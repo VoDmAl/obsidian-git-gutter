@@ -25,3 +25,17 @@
 .git-gutter-modified {
   background: var(--color-yellow, #ffb300);
 }
+
+.git-gutter-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.git-gutter-status-added {
+  color: var(--color-green, #4caf50);
+}
+
+.git-gutter-status-modified {
+  color: var(--color-yellow, #ffb300);
+}

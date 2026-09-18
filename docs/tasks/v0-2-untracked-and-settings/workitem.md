@@ -42,10 +42,12 @@ State as of 2026-09-18, after `0.1.2`:
 - **Shipped and verified in the field.** `0.1.2` is published and delivered to
   `t23b-content` via BRAT; the collapsed-block fix and the status-bar counter were
   both checked on the delivered build, not just locally.
-- **Architecture is two files.** `diff.ts` — parser, markers, `StateField`, gutter
-  extension; imports nothing from `obsidian`, which is what makes it testable.
-  `main.ts` — the plugin class, git invocation, status bar. Keep the seam: the
-  unit suite depends on it.
+- **Architecture is three files** (was two before this crystal). `diff.ts` —
+  parser, markers, `StateField`, gutter extension. `settings.ts` — settings shape,
+  defaults, validation. Neither imports `obsidian`, which is what makes them
+  testable. `main.ts` — the plugin class, git invocation, status bar, settings
+  tab. The seam hardened into an invariant: **`main.ts` is the only file that
+  imports `obsidian`** (Decision Log #5).
 - **The gutter paints per *visual* block.** CM6 collects only markers positioned
   exactly at a block's start, so `lineMarker` folds a whole collapsed block's range
   into one marker. Consequence that constrains any new marker work: **inside a
@@ -55,10 +57,10 @@ State as of 2026-09-18, after `0.1.2`:
   `±0`, `untracked`, `—`. Collapsing any two re-creates the original defect (an
   empty gutter that cannot be told apart from a broken one). This is the constraint
   untracked-file work runs straight into — see Sidetrack #1.
-- **Two test suites.** `npm test` — 18 unit tests over `diff.ts`, gates CI.
-  `npm run test:e2e` — 6 scenarios against a running Obsidian; the repo is its own
-  vault (`.obsidian/` at the root, fixture at `tests/e2e/fixtures/`). E2e cannot
-  run in CI and is a local gate.
+- **Two test suites.** `npm test` — 33 unit tests over `diff.ts` and `settings.ts`
+  (was 18), gates CI. `npm run test:e2e` — 10 scenarios against a running Obsidian
+  (was 6); the repo is its own vault (`.obsidian/` at the root, fixture at
+  `tests/e2e/fixtures/`). E2e cannot run in CI and is a local gate.
 - **Both suites were validated by reverting the fix** and watching exactly the
   right tests go red. Any new marker behaviour owes the same check — see
   `CLAUDE.md` § Conventions, including the stale-bundle trap that made the e2e
@@ -265,11 +267,23 @@ feature, after the stale-bundle trap.
       Roadmap. `CLAUDE.md`: Release, Architecture (three files + the
       only-`main.ts`-imports-`obsidian` invariant), Conventions, Anti-patterns,
       Known limitations.
-- [ ] Release `0.2.0` through the documented flow (`CLAUDE.md` § Release), verify
-      delivery to `t23b-content` via BRAT, and run the e2e suite against the
-      delivered build.
-- [ ] Tell `t23b-content` what changed, via `/vdm:intercom send` — untracked
-      markers alter what its agent sees when it creates a new page.
+- [x] Release `0.2.0` through the documented flow. Tag `0.2.0` → `46115cd`, CI
+      green, the draft's three assets byte-identical to the local build
+      (`main.js` 9594, `styles.css` 1034, `manifest.json` 310), published:
+      https://github.com/VoDmAl/obsidian-git-gutter/releases/tag/0.2.0
+      BRAT delivered it to `t23b-content` — `0.1.2 → 0.2.0`, `main.js`
+      `4682 → 9594`, matching the release assets. Smoke-tested on the delivered
+      build: settings loaded with the right defaults, tab registered, a modified
+      note reported `git +64 ~19` with markers painted. The active file was put
+      back and the vault's git status is byte-for-byte what it was before.
+      Not exercised there: the untracked path — that vault has no untracked
+      markdown note, and creating one to probe would write into real content
+      (the hermetic e2e suite covers it in this repo's own vault instead).
+- [x] Told `t23b-content` via `/vdm:intercom send`
+      (`git-gutter-0-2-0-untracked-and-settings`). Leads with the part that
+      changes its daily workflow — a brand-new note is untracked, so it now opens
+      with the whole gutter green — names the one toggle that switches it off, and
+      asks back only for things that can be observed in real use.
 
 ## References
 

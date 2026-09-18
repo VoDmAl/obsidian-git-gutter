@@ -15,7 +15,7 @@ Build artifact `main.js` is gitignored — published only via GitHub Releases (s
 ## Release
 
 1. Bump `manifest.json#version`. Add the new version → `minAppVersion` mapping to `versions.json`.
-   - Shortcut: `npm version <semver>` triggers `version-bump.mjs` which does both. Don't forget to commit afterwards (`scripts.version` only stages, doesn't commit).
+   - Shortcut: `npm version <semver> --no-git-tag-version` triggers `version-bump.mjs` which does both. `--no-git-tag-version` is required: plain `npm version` commits and tags on its own, and its tag carries a `v` prefix that the release workflow does not match. `scripts.version` stages only `manifest.json` + `versions.json` — stage `package.json` and `package-lock.json` yourself, then commit.
 2. `git tag <version>` — tag name MUST match `manifest.json#version` exactly. No `v` prefix.
 3. `git push origin <version>` — triggers `.github/workflows/release.yml`:
    - `npm ci` (legacy-peer-deps via .npmrc)

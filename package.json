@@ -1,6 +1,6 @@
 {
   "name": "obsidian-git-gutter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Obsidian plugin that highlights uncommitted (added/modified) lines vs HEAD in the editor gutter.",
   "main": "main.js",
   "scripts": {

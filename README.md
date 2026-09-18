@@ -45,6 +45,7 @@ BRAT keeps the plugin up-to-date automatically when new GitHub releases are tagg
 - **Reading mode** has no gutter. Obsidian's reading view does not use CodeMirror, so the same extension cannot decorate it. Edit mode and Live Preview are covered.
 - **Side panes** that are not the active leaf show the last-painted gutter; the refresh hooks watch the active leaf only. Switching panes re-fires refresh, so the lag is brief.
 - **On-disk vs buffer** — `git diff` compares the file on disk to HEAD, not your live editor buffer. Obsidian's autosave is frequent enough that this is barely noticeable in practice.
+- **Rendered blocks mark as a whole.** Live Preview draws a raw-HTML block, table or callout as a single unit, so a change on any line inside one paints the marker across the entire block rather than that one line. Source mode keeps per-line precision.
 - **Desktop only** (`isDesktopOnly: true` in manifest). Mobile Obsidian has no `child_process` access.
 
 ## Roadmap

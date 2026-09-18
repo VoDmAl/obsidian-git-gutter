@@ -3,6 +3,10 @@
 VS Code-style gutter markers for uncommitted lines (added/modified vs HEAD) in Obsidian. Distributed via BRAT — see [README.md](README.md) for user-facing docs.
 
 This file = Claude Code session orientation (build/release/architecture). README = end-user docs.
+[PROJECT_CHANGELOG.md](PROJECT_CHANGELOG.md) = what changed when, one compact entry per change,
+linking out to the crystal or doc that holds the reasoning. Add an entry for a feature, a bug, an
+architecture decision or a tooling change — not for typos or config tweaks. Entries are historical
+record: never rewrite an old one, even after a path it names has moved.
 
 ## Build
 

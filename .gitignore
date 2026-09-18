@@ -13,3 +13,11 @@ main.js
 
 # obsidian local install symlink (if dogfooding via ln -s into vault)
 test-vault/
+
+# The repo is its own Obsidian vault (see CLAUDE.md § Dogfooding). Its committed
+# config is the bare minimum; everything Obsidian writes per-machine stays out.
+.obsidian/plugins/
+.obsidian/workspace*
+.obsidian/appearance.json
+.obsidian/hotkeys.json
+.obsidian/core-plugins*.json

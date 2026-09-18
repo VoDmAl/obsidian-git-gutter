@@ -34,7 +34,8 @@ Marketplace submission (PR to `obsidianmd/obsidian-releases`) is deferred until 
 
 ## Architecture
 
-- **`main.ts`** = entire plugin. Single class `GitGutterPlugin extends Plugin`.
+- **`main.ts`** = the Obsidian layer: `GitGutterPlugin extends Plugin`, refresh wiring, `git` invocation, status bar.
+- **`diff.ts`** = the CodeMirror layer: diff parsing, marker types, the `StateField`, the gutter extension. It imports nothing from `obsidian`, which is what makes it runnable — and testable — outside the app.
 - **`diffField` (CodeMirror 6 `StateField`)** holds per-editor `RangeSet<GutterMarker>` of changed lines. Updated via `setDiffEffect` transactions. Auto-remaps existing ranges on user edits via `value.map(tr.changes)`.
 - **`diffGutter` (CM6 `gutter()` extension)** reads `diffField` and renders markers in a 3px left gutter (see `styles.css`).
 - **Live Preview blocks**: CM6's `gutter()` collects only the markers sitting exactly at a visual block's start, and Live Preview renders raw HTML / tables / callouts as one block spanning many document lines — so every change below such a block's first line was invisible. `lineMarker` folds the block's whole range into a single marker (`markerForRange`); `lineMarkerChange: update.selectionSet` re-syncs when a block folds/unfolds.
@@ -48,20 +49,32 @@ Marketplace submission (PR to `obsidianmd/obsidian-releases`) is deferred until 
 - TypeScript with `strictNullChecks: true`. No `any` for plugin-owned code (Obsidian's editor.cm cast through `unknown` is the one allowed escape hatch — Obsidian doesn't expose `cm: EditorView` in its public types).
 - esbuild externals: `obsidian`, `electron`, all `@codemirror/*`, all `@lezer/*`, Node builtins. Obsidian provides these at runtime.
 - Output: CJS bundle to `main.js` (Obsidian loads plugins via `require()`).
-- No automated tests yet. Verification = symlink the repo into a test vault, reload Obsidian, edit a tracked `.md`, observe gutter.
+- `npm test` — `node --test` over `tests/*.test.ts`. No test framework and no build step: node strips the types and runs the sources directly, which is why `diff.ts` must stay free of `obsidian` imports and of non-erasable TypeScript (no parameter properties, no enums), and why its imports separate `import type` from value imports. CI runs it before the build, so a red test blocks a release.
+- `npm run test:e2e` — the other half, against a **running Obsidian** through the `obsidian` CLI: whether CodeMirror actually paints a marker where it was asked, what Live Preview does to the block structure, what the status bar says. Unit tests cannot see any of that, and the collapsed-block bug lived entirely there. Not runnable in CI (needs a desktop app and an open vault), so it is a local gate, not an automatic one.
+- The e2e vault is **this repository itself** — `.obsidian/` sits at the repo root and the fixture note lives at `tests/e2e/fixtures/collapsed-block.md`. One directory serves git and Obsidian, so the fixture is already tracked (there is something to diff against), the edits land on files that go through review, and the plugin's own "run git from the file's directory" logic finds this repo. `userIgnoreFilters` hides `node_modules/` (938 files — small enough that indexing it costs nothing, but it has no business in the file explorer).
+- The committed vault config is deliberately minimal: `app.json` (which pins Live Preview — every interesting case disappears in Source mode) and `community-plugins.json`. Everything Obsidian writes per-machine — `workspace.json`, `appearance.json`, `core-plugins.json`, `plugins/` — is gitignored.
+- **One-time setup:** Obsidian only opens a folder it already knows, so `obsidian://open?path=…` fails with *Unable to find a vault for the URL* until the repo has been opened once through Obsidian → Open folder as vault. The suite tries the URI, waits, and skips with that instruction rather than failing.
+- The suite installs the working-tree build into `.obsidian/plugins/git-gutter` (also `npm run vault:install`), edits the fixture **on disk** rather than through the editor — which is how the plugin is actually used — and restores the file and the untracked probe in `after`, including when a test fails. Lines are addressed by the sentence they contain, not by number, so editing the fixture's prose cannot silently re-point an assertion.
+- Scenarios that do not depend on the fixture's git state (the block structure, the untracked probe) still run when the fixture is uncommitted; the ones that diff against HEAD skip with the reason.
+- Both suites were checked against the bug they describe: revert the fix, watch exactly those tests go red, restore. A test that has never failed proves nothing.
 
 ## Dogfooding (local development)
 
-Fastest loop is `npm run dev` (esbuild watch) + symlink:
+The repo is its own vault, so there is no external test vault to wire up. Open this
+folder in Obsidian once (Open folder as vault) and the plugin marks the repo's own
+uncommitted work — edit `README.md` or `CLAUDE.md` and the gutter shows what changed
+since HEAD, before anything is committed.
 
 ```bash
-ln -s "$(pwd)" /path/to/test-vault/.obsidian/plugins/git-gutter
+npm run dev            # esbuild watch, rebuilds main.js on save
+npm run vault:install  # copy main.js + manifest.json + styles.css into .obsidian/plugins/git-gutter
 ```
 
-Then in Obsidian: Settings → Community plugins → enable `git-gutter`. After code changes are bundled to `main.js` (esbuild prints `✔ done`), reload the plugin via Obsidian CLI:
+After code changes are bundled to `main.js` (esbuild prints `✔ done`), re-run
+`vault:install` and reload the plugin via Obsidian CLI:
 
 ```bash
-obsidian plugin:reload id=git-gutter
+obsidian vault=obsidian-git-gutter plugin:reload id=git-gutter
 ```
 
 Or `Cmd+R` to reload the whole vault.

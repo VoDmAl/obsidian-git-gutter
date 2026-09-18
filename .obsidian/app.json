@@ -1,0 +1,9 @@
+{
+  "alwaysUpdateLinks": false,
+  "promptDelete": false,
+  "defaultViewMode": "source",
+  "livePreview": true,
+  "userIgnoreFilters": [
+    "node_modules/"
+  ]
+}

@@ -17,12 +17,18 @@ Build artifact `main.js` is gitignored — published only via GitHub Releases (s
 1. Bump `manifest.json#version`. Add the new version → `minAppVersion` mapping to `versions.json`.
    - Shortcut: `npm version <semver> --no-git-tag-version` triggers `version-bump.mjs` which does both. `--no-git-tag-version` is required: plain `npm version` commits and tags on its own, and its tag carries a `v` prefix that the release workflow does not match. `scripts.version` stages only `manifest.json` + `versions.json` — stage `package.json` and `package-lock.json` yourself, then commit.
 2. `git tag <version>` — tag name MUST match `manifest.json#version` exactly. No `v` prefix.
-3. `git push origin <version>` — triggers `.github/workflows/release.yml`:
+3. `git push origin main && git push origin <version>` — the tag triggers `.github/workflows/release.yml`:
    - `npm ci` (legacy-peer-deps via .npmrc)
    - `npm run build`
    - `gh release create <tag> --draft main.js manifest.json styles.css`
-4. Open the draft release on GitHub → sanity-check the 3 attached assets → **Publish**. The draft step is deliberate: gives a chance to abort if something went wrong in CI.
-5. BRAT clients pick up new release on next refresh (or via BRAT settings → check for updates).
+4. Wait for CI, then sanity-check the draft's 3 assets against the local build:
+   ```
+   gh run watch "$(gh run list --limit 1 --json databaseId -q '.[0].databaseId')" --exit-status
+   gh release view <tag> --json isDraft,assets -q '(.assets[] | "\(.name) \(.size)")'
+   ```
+   Byte sizes must match `wc -c main.js styles.css manifest.json`. The draft step is deliberate — it is the chance to abort if CI produced something unexpected — but it is a check, not a trip to the browser.
+5. `gh release edit <tag> --draft=false` — publishes. **Do not** publish with a local `gh release create` instead: a tag created through the API by your own token still fires `on: push: tags`, so the workflow runs and fails on a release that already exists, and the assets would come from the local worktree rather than clean CI.
+6. BRAT clients pick up the new release on next refresh, or force it with `obsidian command id=obsidian42-brat:checkForUpdatesAndUpdate` (the `id=` prefix is required). Verify by re-reading the installed `manifest.json` version and `main.js` byte count under `<vault>/.obsidian/plugins/git-gutter/`.
 
 Marketplace submission (PR to `obsidianmd/obsidian-releases`) is deferred until v0.2+ closes the obvious gaps (untracked files, reading mode). Don't submit at v0.1 — high chance of bounce-back.
 

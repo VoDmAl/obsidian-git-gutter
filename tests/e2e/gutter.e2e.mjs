@@ -28,6 +28,7 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const vault = repo;
 const VAULT_NAME = basename(repo);
 const PLUGIN_ID = 'git-gutter';
+const ASSETS = ['main.js', 'styles.css', 'manifest.json'];
 const pluginDir = join(vault, '.obsidian', 'plugins', PLUGIN_ID);
 
 const FIXTURE = 'tests/e2e/fixtures/collapsed-block.md';
@@ -143,9 +144,20 @@ before(async () => {
     ctx.uncommittedReason = `${FIXTURE} is not committed (${status.slice(0, 2).trim() || 'modified'}) — commit it, then re-run`;
   }
 
+  // Build first. Without this the suite installs whatever `main.js` happens to
+  // be lying in the repo and reports on a stale bundle — a green run that means
+  // nothing, which is precisely the failure this suite exists to catch.
+  execFileSync('npm', ['run', 'build'], { cwd: repo, encoding: 'utf8' });
   mkdirSync(pluginDir, { recursive: true });
-  for (const asset of ['main.js', 'styles.css', 'manifest.json']) {
+  for (const asset of ASSETS) {
     copyFileSync(join(repo, asset), join(pluginDir, asset));
+    // A copy that silently did not happen would put us back in the stale-bundle
+    // hole, so compare the bytes rather than trusting the call.
+    assert.deepEqual(
+      readFileSync(join(pluginDir, asset)),
+      readFileSync(join(repo, asset)),
+      `${asset} was not installed into the vault`
+    );
   }
 
   if (!vaultReachable()) {
@@ -162,6 +174,8 @@ before(async () => {
   }
 
   ob('plugin:reload', `id=${PLUGIN_ID}`);
+  await sleep(1000);
+  assert.equal(obEval(`!!app.plugins.plugins['${PLUGIN_ID}']`), 'true', 'the plugin failed to load in the vault');
   ctx.original = readFileSync(fixturePath, 'utf8');
   ctx.lines = ctx.original.split('\n');
   ob('open', `path=${FIXTURE}`);

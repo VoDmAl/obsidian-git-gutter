@@ -57,6 +57,7 @@ Marketplace submission (PR to `obsidianmd/obsidian-releases`) is deferred until 
 - The suite installs the working-tree build into `.obsidian/plugins/git-gutter` (also `npm run vault:install`), edits the fixture **on disk** rather than through the editor — which is how the plugin is actually used — and restores the file and the untracked probe in `after`, including when a test fails. Lines are addressed by the sentence they contain, not by number, so editing the fixture's prose cannot silently re-point an assertion.
 - Scenarios that do not depend on the fixture's git state (the block structure, the untracked probe) still run when the fixture is uncommitted; the ones that diff against HEAD skip with the reason.
 - Both suites were checked against the bug they describe: revert the fix, watch exactly those tests go red, restore. A test that has never failed proves nothing.
+- The e2e suite **builds before it installs**, and asserts the installed bytes match. Skipping the build makes it report on whatever `main.js` was lying around — it stayed green through a deliberately reintroduced bug once, exactly because of that. If you touch the `before` hook, redo the revert-the-fix check.
 
 ## Dogfooding (local development)
 

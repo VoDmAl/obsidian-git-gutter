@@ -54,7 +54,7 @@ function obEval(code) {
 const obJson = (code) => JSON.parse(obEval(code));
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
 
-const ctx = { ready: false, skipReason: '', committed: false, uncommittedReason: '', lines: [], original: '' };
+const ctx = { ready: false, skipReason: '', committed: false, uncommittedReason: '', lines: [], original: '', settings: null };
 
 /**
  * Lines are addressed by the sentence they contain rather than by number, so
@@ -98,6 +98,55 @@ function blockOf(lineNum) {
     const b=cm.lineBlockAt(cm.state.doc.line(${lineNum}).from);
     return JSON.stringify({from:cm.state.doc.lineAt(b.from).number,to:cm.state.doc.lineAt(b.to).number,
       type:Array.isArray(b.type)?'array':b.type})})()`);
+}
+
+/** The live settings object, straight off the loaded plugin. */
+function settings() {
+  return obJson(`JSON.stringify(app.plugins.plugins['${PLUGIN_ID}'].settings)`);
+}
+
+/**
+ * Change settings the way the settings tab does — mutate, then `saveSettings()`,
+ * which is what re-applies colours, the debounce and the extension list. Poking
+ * `settings` alone would test nothing: the whole question is whether saving
+ * propagates.
+ */
+async function setSettings(patch) {
+  obEval(`(async()=>{const p=app.plugins.plugins['${PLUGIN_ID}'];
+    Object.assign(p.settings,${JSON.stringify(patch)});await p.saveSettings();return 'ok'})()`);
+  await sleep(SETTLE_MS);
+}
+
+/** Whether the 3 px column exists at all in the active editor — not whether it is empty. */
+function gutterColumnPresent() {
+  return (
+    obEval(`(()=>{const cm=app.workspace.activeLeaf.view.editor?.cm;
+    return cm?!!cm.dom.parentElement.querySelector('.cm-git-gutter'):false})()`) === 'true'
+  );
+}
+
+/**
+ * The colour a *painted* marker resolves to, after var() and the theme.
+ *
+ * Same filter as gutterMarkers(): a plain `.git-gutter-marker` query also finds
+ * the gutter's `initialSpacer`, which carries the identical class and exists
+ * even when nothing is marked — so the naive version of this helper reported a
+ * colour for an empty gutter and stayed green through a reverted feature.
+ */
+function paintedColor() {
+  return obEval(`(()=>{const cm=app.workspace.activeLeaf.view.editor.cm;
+    const scope=cm.dom.parentElement||cm.dom;
+    for(const e of scope.querySelectorAll('.cm-git-gutter .cm-gutterElement')){
+      const r=e.getBoundingClientRect();
+      if(!e.firstChild||r.height===0)continue;
+      return getComputedStyle(e.firstChild).backgroundColor;
+    }
+    return ''})()`);
+}
+
+/** Lines in the active editor's document — what an untracked file marks all of. */
+function docLines() {
+  return Number(obEval('app.workspace.activeLeaf.view.editor.cm.state.doc.lines'));
 }
 
 /** CodeMirror renders only the viewport; anything below it has no gutter element to find. */
@@ -176,6 +225,10 @@ before(async () => {
   ob('plugin:reload', `id=${PLUGIN_ID}`);
   await sleep(1000);
   assert.equal(obEval(`!!app.plugins.plugins['${PLUGIN_ID}']`), 'true', 'the plugin failed to load in the vault');
+  // Settings live in the vault's gitignored plugin folder, so the suite can
+  // change them — but this is the developer's own dogfooding vault, so whatever
+  // was there is put back in `after`, failures included.
+  ctx.settings = settings();
   ctx.original = readFileSync(fixturePath, 'utf8');
   ctx.lines = ctx.original.split('\n');
   ob('open', `path=${FIXTURE}`);
@@ -184,6 +237,13 @@ before(async () => {
 });
 
 after(async () => {
+  if (ctx.settings) {
+    try {
+      await setSettings(ctx.settings);
+    } catch {
+      // Obsidian may be gone by now; the file on disk is still the developer's.
+    }
+  }
   try {
     git('checkout', '--', FIXTURE);
   } catch {
@@ -263,9 +323,10 @@ test('the counter reports both changed lines', async (t) => {
   assert.match(status.tooltip, /0 added, 2 modified/);
 });
 
-test('an untracked file is named as untracked, not reported as unchanged', async (t) => {
+test('an untracked file is marked green from top to bottom', async (t) => {
   // Its own probe file, nothing to do with the fixture's git state.
   if (!guard(t, false)) return;
+  await setSettings({ markUntracked: true });
   writeFileSync(join(vault, PROBE), '# probe\n\nnot in git\n');
   // Obsidian indexes the vault before `open` can resolve a brand-new file.
   await sleep(3000);
@@ -273,8 +334,80 @@ test('an untracked file is named as untracked, not reported as unchanged', async
   await sleep(SETTLE_MS);
 
   assert.equal(obEval('app.workspace.getActiveFile()?.path'), PROBE, 'the probe must be the active file');
-  assert.match(statusBar().text, /untracked$/);
-  assert.deepEqual(gutterMarkers(), [], 'nothing to diff against means nothing to mark');
+
+  // Nothing in HEAD to compare against, so every line of it is new. Remove
+  // markAllAdded from main.ts's untracked branch and this is what goes red.
+  const lines = docLines();
+  const markers = gutterMarkers();
+  assert.ok(markers.length > 0, 'an untracked file must be marked, not left blank');
+  assert.ok(
+    markers.every((m) => m.type === 'added'),
+    `nothing here replaced a line in HEAD, so nothing is modified; got ${JSON.stringify(markers)}`
+  );
+  const covered = new Set();
+  for (const m of markers) for (let n = m.from; n <= m.to; n++) covered.add(n);
+  assert.equal(covered.size, lines, `all ${lines} lines must be covered, got ${covered.size}`);
+});
+
+test('the counter reads +N untracked — the count and the state, not one or the other', async (t) => {
+  if (!guard(t, false)) return;
+  const status = statusBar();
+  // Dropping "untracked" would make this file indistinguishable from an
+  // ordinary changed one; dropping the count would contradict a full gutter.
+  assert.match(status.text, /\+\d+untracked$/, `expected "+N untracked", got ${status.text}`);
+  assert.match(status.text, new RegExp(`\\+${docLines()}untracked$`), 'the count must match the file');
+  assert.match(status.tooltip, /untracked file/i);
+});
+
+test('turning untracked marking off empties the gutter but still names the state', async (t) => {
+  if (!guard(t, false)) return;
+  // Every scenario that changes a setting puts it back in `finally`: an
+  // assertion that throws mid-test would otherwise leave the next one running
+  // against a configuration it never asked for, and the real failure would
+  // arrive buried in cascading ones.
+  try {
+    await setSettings({ markUntracked: false });
+
+    assert.deepEqual(gutterMarkers(), [], 'with marking off there is nothing to paint');
+    const status = statusBar();
+    assert.match(status.text, /untracked$/, 'the state survives the toggle');
+    assert.doesNotMatch(status.text, /\+\d/, 'with nothing painted the counter must not claim a count');
+    // And it is still not the same thing as a clean file.
+    assert.doesNotMatch(status.text, /±0/);
+  } finally {
+    await setSettings({ markUntracked: true });
+  }
+  assert.ok(gutterMarkers().length > 0, 'turning it back on must repaint without a reload');
+});
+
+test('a chosen colour reaches the painted marker', async (t) => {
+  if (!guard(t, false)) return;
+  assert.ok(gutterMarkers().length > 0, 'there must be a painted marker to read a colour from');
+  const themeGreen = paintedColor();
+  assert.notEqual(themeGreen, '', 'the painted marker must resolve to some colour');
+
+  try {
+    await setSettings({ addedColor: '#ff00ff' });
+    assert.equal(paintedColor(), 'rgb(255, 0, 255)', 'the setting must win over the theme');
+  } finally {
+    await setSettings({ addedColor: '' });
+  }
+  assert.equal(paintedColor(), themeGreen, 'the empty value must hand the colour back to the theme');
+});
+
+test('disabling the gutter removes the column, not just its contents', async (t) => {
+  if (!guard(t, false)) return;
+  assert.ok(gutterColumnPresent(), 'the column must be there to begin with');
+
+  try {
+    await setSettings({ enabled: false });
+    assert.equal(gutterColumnPresent(), false, 'off must drop the CM extension, not paint an empty gutter');
+    assert.equal(statusBar().visible, false, 'off means the status bar goes too');
+  } finally {
+    await setSettings({ enabled: true });
+  }
+  assert.ok(gutterColumnPresent(), 'the column must come back without a reload');
+  assert.equal(statusBar().visible, true);
 });
 
 test('reverting the file clears the gutter again', async (t) => {

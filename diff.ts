@@ -13,11 +13,20 @@ export interface DiffMark {
   type: MarkerType;
 }
 
-/** What the status bar has to say about the active file. */
+/**
+ * What the status bar has to say about the active file.
+ *
+ * `untracked` carries marks for the same reason `changes` does: once every line
+ * of an untracked file is painted, a bar reading only `untracked` contradicts a
+ * full gutter. It reads `+N untracked` instead — the count and the state, so
+ * neither the gutter nor the four-state rule loses (Decision Log #4). The list
+ * is empty when marking is switched off or the file is empty, and the bar then
+ * falls back to a bare `untracked`, still distinct from `±0`.
+ */
 export type GutterStatus =
   | { kind: 'changes'; marks: DiffMark[] }
   | { kind: 'clean' }
-  | { kind: 'untracked' }
+  | { kind: 'untracked'; marks: DiffMark[] }
   | { kind: 'unavailable' };
 
 class TypedMarker extends GutterMarker {
@@ -107,6 +116,25 @@ export function markerForRange(view: EditorView, from: number, to: number): Gutt
   if (found.type === 'modified') return MODIFIED;
   if (found.type === 'added') return ADDED;
   return null;
+}
+
+/**
+ * Every line of the document, as an added line.
+ *
+ * An untracked file has nothing in HEAD to diff against — `git diff HEAD` exits
+ * 0 with no output, exactly as it does for a clean file — so the marks cannot
+ * come from a diff. They come from the buffer instead, which is the one place
+ * that differs from the rest of the plugin: elsewhere the counts describe the
+ * file on disk, here they describe what is open. For an untracked file the two
+ * are the same thing as far as git is concerned (all of it is new), so the
+ * distinction costs nothing.
+ */
+export function markAllAdded(lineCount: number): DiffMark[] {
+  const marks: DiffMark[] = [];
+  for (let lineNum = 1; lineNum <= lineCount; lineNum++) {
+    marks.push({ lineNum, type: 'added' });
+  }
+  return marks;
 }
 
 export function parseDiff(diffText: string): DiffMark[] {

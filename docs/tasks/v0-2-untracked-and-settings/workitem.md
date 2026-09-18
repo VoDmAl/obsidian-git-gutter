@@ -106,6 +106,65 @@ would have made the roadmap lie.
 **Implication:** `0.2.0` is reserved for this crystal's scope. Anything shipped
 before it is `0.1.x`, even when it adds a feature.
 
+### #3 / 2026-09-18 / The marketplace gate is v0.2 only; reading mode is not a condition
+
+**Source:** user
+**Basis:** user-stated
+**Basis-detail:** Asked directly, with the contradiction of Decision Log #1 laid
+out and three options offered (gate on v0.2 / gate on v0.4 / no marketplace at
+all). The owner chose "только v0.2 (untracked + settings)".
+**Context:** Decision Log #1 recorded that `README.md:57` and `CLAUDE.md:33`
+disagree about what blocks submission to `obsidianmd/obsidian-releases`.
+**Why:** Reading mode is not a small job — `CLAUDE.md` § Anti-patterns records
+that naive line→line mapping through the markdown post-processor produces wrong
+gutter positions — and making submission wait on it would park the plugin outside
+the marketplace for two more releases with no benefit to anyone installing it.
+Untracked files and a settings tab are the gaps a reviewer would actually notice.
+**Implication:** `CLAUDE.md:33` is the document that is wrong and gets corrected:
+reading mode leaves the gate, stays on the roadmap at `v0.4`. Shipping `0.2.0`
+closes the gate. Sidetrack #2 resolved; Sidetrack #3 (`.obsidian/` in the repo)
+becomes live rather than hypothetical, since submission is now near.
+
+### #4 / 2026-09-18 / An untracked file reads `+N untracked` — count and state both
+
+**Source:** user
+**Basis:** user-stated
+**Basis-detail:** Asked directly as Sidetrack #1, with three renderings offered:
+`+N untracked`, `+N` alone with the state demoted to the tooltip, or `untracked`
+alone with no count. The owner chose `+N untracked`.
+**Context:** Once every line of an untracked file is marked green, a status bar
+that still says only `untracked` contradicts a full gutter.
+**Why:** The status bar exists because an empty gutter has four causes that look
+identical. Dropping the word `untracked` (option 2) collapses two of those four
+states into one and re-creates exactly that defect; dropping the count (option 3)
+leaves the counter disagreeing with what is painted. Showing both keeps four
+distinguishable states and keeps the counter honest about the gutter.
+**Implication:** `GutterStatus`'s `untracked` variant carries `marks`, like
+`changes` does. With marking switched off (Decision Log #5) or on an empty file
+the count is zero and the bar falls back to a bare `untracked`, which stays
+distinct from `±0`.
+
+### #5 / 2026-09-18 / Settings = roadmap three + an untracked toggle; only `main.ts` imports `obsidian`
+
+**Source:** both
+**Basis:** user-stated
+**Basis-detail:** The owner chose "всё из roadmap + тумблер untracked" over the
+bare roadmap list and over a debounce-only minimum. The file layout that follows
+is the assistant's call.
+**Context:** `README.md` § Roadmap scopes the tab as "colour customisation,
+debounce interval, on/off per vault".
+**Why (toggle):** Marking every line of an untracked file paints the whole gutter
+green. In a vault where many notes are untracked that is noise rather than signal,
+and the person it annoys has no way out short of uninstalling.
+**Why (layout):** The unit suite runs `diff.ts` directly under `node --test`, which
+works only because nothing in it imports `obsidian`. Settings have a pure half
+(shape, defaults, validation — worth testing) and an Obsidian half (`PluginSettingTab`).
+Splitting them gives `settings.ts` with no `obsidian` import and leaves the tab in
+`main.ts`, which promotes the two-file seam into a sharper invariant: **`main.ts` is
+the only file that imports `obsidian`.**
+**Implication:** Three source files instead of two. `CLAUDE.md` § Architecture and
+§ Conventions have to say so, and the invariant is what any later file must respect.
+
 ## Sidetracks
 
 ### #1. Untracked markers and the `untracked` status state collide
@@ -118,7 +177,8 @@ and the two disagree. This needs deciding before the marker work, not after: the
 whole reason the counter exists is that an empty gutter and a broken one used to
 look identical.
 
-**Status:** open
+**Status:** resolved — Decision Log #4. The bar reads `+N untracked`: both the
+count and the state, so neither the gutter nor the four-state rule loses.
 
 ### #2. Reading mode has no scheduled home, but gates the marketplace in one doc
 
@@ -130,7 +190,8 @@ collapses and expands lines. So whatever v0.4 does, it is not a small job — wh
 is an argument for removing it from the marketplace gate rather than from the
 roadmap.
 
-**Status:** open
+**Status:** resolved — Decision Log #3 took exactly that argument: reading mode
+leaves the gate and stays on the roadmap at `v0.4`.
 
 ### #3. `.obsidian/` at the repo root is new, and marketplace reviewers will see it
 
@@ -141,7 +202,9 @@ and e2e. Harmless as far as anyone here knows, but nobody has checked whether th
 `obsidianmd/obsidian-releases` review process objects to a vault config in a plugin
 repository. Worth a look before submission, not before v0.2.
 
-**Status:** open
+**Status:** open — and no longer hypothetical: Decision Log #3 puts submission
+directly after `0.2.0`, so this is the last thing standing between the release and
+the PR.
 
 ### #4. Side panes still show a stale gutter
 
@@ -153,27 +216,55 @@ touches the same refresh path, so it may be cheap to fix while in there.
 
 **Status:** open
 
+### #5. An e2e assertion can read the gutter's spacer instead of a marker
+
+**Возникло в:** the revert-the-fix check on the settings scenarios
+**Описание:** The colour scenario stayed green with the untracked feature
+deliberately reverted and the gutter empty. Cause: `gutter()`'s `initialSpacer`
+renders an element carrying the same `git-gutter-marker git-gutter-added`
+classes as a real marker, and exists whether or not anything is marked — so
+`querySelector('.git-gutter-marker')` found *something* in an empty gutter. The
+helper now walks `.cm-gutterElement`s and skips any with no `firstChild` or zero
+height, which is the filter `gutterMarkers()` already used — which is why the
+older scenarios were never fooled.
+
+**Status:** resolved — helper fixed, re-checked against the same revert (the
+scenario went red), recorded in `CLAUDE.md` § Anti-patterns. Worth keeping
+visible: it is the second time a test in this repo passed through a reverted
+feature, after the stale-bundle trap.
+
 ## Next actions
 
-- [ ] Settle Decision Log #1 with the owner: does marketplace submission wait for
+- [x] Settle Decision Log #1 with the owner: does marketplace submission wait for
       reading mode (`v0.4`), or only for untracked files + settings (`v0.2`)? Write
       the answer as a DL entry, then correct whichever document is wrong.
-- [ ] Decide Sidetrack #1 — what the status bar says for an untracked file once its
-      lines are marked — before writing the marker code.
-- [ ] Implement untracked-file markers: pre-check with
-      `git ls-files --others --exclude-standard`, mark every line as added. The
-      `isTracked()` helper in `main.ts` already distinguishes the case.
-- [ ] Add unit tests for the untracked path in `tests/diff.test.ts`, and an e2e
-      scenario in `tests/e2e/gutter.e2e.mjs` — the probe file is already created and
-      torn down there.
-- [ ] Verify the new tests by reverting the implementation and watching them go
-      red. Re-read `CLAUDE.md` § Conventions on the stale-bundle trap first.
-- [ ] Design the settings tab: colour customisation, debounce interval, on/off per
-      vault. Decide what persists and how defaults are expressed.
-- [ ] Implement the settings tab, including wiring the debounce interval through to
-      the existing 400 ms `debounce()` in `main.ts`.
-- [ ] Update `README.md` §§ Features / Known limitations / Roadmap and
-      `CLAUDE.md` § Architecture for both features.
+      → Decision Log #3; `CLAUDE.md` § Release rewritten, `README.md` left alone.
+- [x] Decide Sidetrack #1 — what the status bar says for an untracked file once its
+      lines are marked — before writing the marker code. → Decision Log #4: `+N untracked`.
+- [x] Implement untracked-file markers. Done via the existing `isTracked()`
+      (`git ls-files --error-unmatch`) rather than the `--others` pre-check the
+      roadmap proposed — the plugin already ran it on the empty-diff branch, so
+      the feature cost no extra git call. `markAllAdded()` in `diff.ts` marks
+      every line of the buffer.
+- [x] Tests. `tests/diff.test.ts` +4 (untracked marks), `tests/settings.test.ts`
+      new (+11, validation), e2e rewritten around the probe +4 scenarios:
+      33 unit / 10 e2e, both green.
+- [x] Revert-the-fix check, in three passes. (1) `markAllAdded` → `[]` plus the
+      settings validation: 4 unit red. (2) the untracked branch of `main.ts` back
+      to 0.1.2: unit stayed **fully green**, 3 e2e red — which is the split the
+      two suites exist for. (3) `applyColors`/`applyGutterExtension` neutered:
+      exactly the 2 settings scenarios red. Pass 2 also exposed Sidetrack #5.
+- [x] Design the settings tab → Decision Log #5. Six settings; `''` expresses
+      "follow the theme" rather than a stored hex, so a theme switch keeps working.
+- [x] Implement the settings tab. `settings.ts` (pure) + `GitGutterSettingTab` in
+      `main.ts`; debounce rebuilt on save, colours written as CSS custom properties
+      on `<body>`, the gutter toggled by mutating the registered extension array
+      and calling `workspace.updateOptions()`.
+- [x] Docs. `README.md`: Features, a new § Settings table, Known limitations
+      (v0.1 → v0.2, untracked bullet replaced by the buffer-vs-disk caveat),
+      Roadmap. `CLAUDE.md`: Release, Architecture (three files + the
+      only-`main.ts`-imports-`obsidian` invariant), Conventions, Anti-patterns,
+      Known limitations.
 - [ ] Release `0.2.0` through the documented flow (`CLAUDE.md` § Release), verify
       delivery to `t23b-content` via BRAT, and run the e2e suite against the
       delivered build.

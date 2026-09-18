@@ -18,12 +18,16 @@
   min-height: 1em;
 }
 
+/* --git-gutter-added / --git-gutter-modified are written onto <body> by the
+   settings tab. Unset — the default — the marker falls through to the theme's
+   own green and yellow, which is why "follow the theme" is expressed as an
+   empty setting rather than a stored hex value. */
 .git-gutter-added {
-  background: var(--color-green, #4caf50);
+  background: var(--git-gutter-added, var(--color-green, #4caf50));
 }
 
 .git-gutter-modified {
-  background: var(--color-yellow, #ffb300);
+  background: var(--git-gutter-modified, var(--color-yellow, #ffb300));
 }
 
 .git-gutter-status {
@@ -33,9 +37,9 @@
 }
 
 .git-gutter-status-added {
-  color: var(--color-green, #4caf50);
+  color: var(--git-gutter-added, var(--color-green, #4caf50));
 }
 
 .git-gutter-status-modified {
-  color: var(--color-yellow, #ffb300);
+  color: var(--git-gutter-modified, var(--color-yellow, #ffb300));
 }

@@ -12,7 +12,9 @@ For anyone who keeps their markdown notes in a git repository — workspaces, co
 - **Auto-refresh** — on file open, on editor change, on save (debounced 400 ms).
 - **Multi-repo** — works wherever `git diff HEAD` works. The plugin runs `git` from the file's own directory, so any sub-project git repo inside your vault is detected automatically — no global config.
 - **Edit mode + Live Preview** — both CodeMirror 6 surfaces are covered.
-- **Status bar counter** — states what the gutter cannot: `+7 ~3` for changed lines, `±0` for a tracked file with nothing to show, `untracked` for a file git does not follow, `—` when no diff could be produced at all. An empty gutter has four possible causes and they look identical; the counter names which one it is.
+- **Untracked files** — a file git has never seen has nothing in `HEAD` to compare against, so every line of it counts as added and the whole gutter goes green. Switchable off for vaults where most notes are untracked.
+- **Status bar counter** — states what the gutter cannot: `+7 ~3` for changed lines, `±0` for a tracked file with nothing to show, `+42 untracked` for a file git does not follow, `—` when no diff could be produced at all. An empty gutter has four possible causes and they look identical; the counter names which one it is.
+- **Settings tab** — gutter on/off per vault, status bar on/off, untracked marking on/off, refresh delay, and the two marker colours (empty = follow the theme).
 
 ## Install via BRAT (recommended)
 
@@ -38,11 +40,25 @@ BRAT keeps the plugin up-to-date automatically when new GitHub releases are tagg
 - Hunk parser tracks `+` lines (added/modified) and `-` lines (deletions; modified flag if followed by `+`).
 - The resulting `RangeSet` is dispatched via a `StateEffect`. CM6 paints the gutter on next render.
 
-`git` is invoked as a subprocess with a 5 s timeout. If `git` is not on `PATH`, the file is not in a repo, or the command fails for any other reason, the gutter is cleared and the status bar shows `—`. An empty diff is ambiguous on its own — a clean file and an untracked one both produce one — so that case costs a second call, `git ls-files --error-unmatch`, to tell them apart.
+`git` is invoked as a subprocess with a 5 s timeout. If `git` is not on `PATH`, the file is not in a repo, or the command fails for any other reason, the gutter is cleared and the status bar shows `—`. An empty diff is ambiguous on its own — a clean file and an untracked one both produce one — so that case costs a second call, `git ls-files --error-unmatch`, to tell them apart. An untracked file has no `HEAD` side at all, so its marks do not come from a diff: every line of the open document is marked added.
 
-## Known limitations (v0.1)
+## Settings
 
-- **Untracked files** show no markers. `git diff HEAD` produces no output for files that have never been `git add`-ed — the status bar says `untracked` so the empty gutter is not mistaken for an unchanged file, but the lines themselves stay unmarked. Fix candidate: mark every line of such a file as added.
+**Settings → Community plugins → Git Gutter**.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Enable gutter | on | Off removes the CodeMirror extension outright — no markers, no status bar, and no `git` subprocess for this vault. |
+| Show status bar counter | on | The four-state counter. Off hides it; the gutter keeps painting. |
+| Mark untracked files | on | Off leaves an untracked file unmarked. The counter still says `untracked`, so the empty gutter is never mistaken for an unchanged file. |
+| Refresh delay | 400 ms | How long after the last edit before `git` runs again (100–3000 ms). Lower reacts sooner and shells out more often. |
+| Added / Modified colour | theme | Empty means the theme's own green and yellow; the reset button next to each picker hands the colour back to the theme. |
+
+Settings are per vault — they live in `<vault>/.obsidian/plugins/git-gutter/data.json`.
+
+## Known limitations (v0.2)
+
+- **Untracked files are marked from the buffer, not from disk.** With nothing in `HEAD` to diff against, the marks come from the open document — so an untracked file's count follows what is on screen, where a tracked file's follows what is saved.
 - **Reading mode** has no gutter. Obsidian's reading view does not use CodeMirror, so the same extension cannot decorate it. Edit mode and Live Preview are covered.
 - **Side panes** that are not the active leaf show the last-painted gutter; the refresh hooks watch the active leaf only. Switching panes re-fires refresh, so the lag is brief.
 - **On-disk vs buffer** — `git diff` compares the file on disk to HEAD, not your live editor buffer. Obsidian's autosave is frequent enough that this is barely noticeable in practice.
@@ -51,8 +67,7 @@ BRAT keeps the plugin up-to-date automatically when new GitHub releases are tagg
 
 ## Roadmap
 
-- `v0.2` — untracked-file detection (mark whole file as added).
-- `v0.2` — settings tab (colour customisation, debounce interval, on/off per vault).
+- ~~`v0.2` — untracked-file detection, settings tab.~~ Shipped.
 - `v0.3` — gutter hover popover showing the diff hunk for that line.
 - `v0.4` — reading-mode markers via markdown post-processor (approximation; line mapping is lossier in rendered HTML).
 - Maybe — comparison base configurable (HEAD vs index, HEAD vs `origin/main`, etc.).

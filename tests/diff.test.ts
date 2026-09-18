@@ -5,6 +5,7 @@ import { EditorView } from '@codemirror/view';
 import {
   buildMarkers,
   diffField,
+  markAllAdded,
   markerForRange,
   parseDiff,
   setDiffEffect,
@@ -120,6 +121,46 @@ test('marks beyond the end of the buffer are dropped rather than throwing', () =
     count++;
   });
   assert.equal(count, 0);
+});
+
+// --- untracked files ---------------------------------------------------------
+// `git diff HEAD` says nothing about a file it has never seen, so the marks for
+// one cannot come from a diff at all — they come from the buffer, every line of
+// which is new. Remove markAllAdded from the untracked branch in main.ts and
+// these are the tests that notice.
+
+test('an untracked file marks every one of its lines as added', () => {
+  assert.deepEqual(markAllAdded(3), [
+    { lineNum: 1, type: 'added' },
+    { lineNum: 2, type: 'added' },
+    { lineNum: 3, type: 'added' },
+  ]);
+});
+
+test('an empty untracked file has no line to mark', () => {
+  // `doc.lines` is 1 for an empty buffer, so main.ts passes 0 rather than the
+  // line count; a bar reading "+1 untracked" over an empty file would be a lie.
+  assert.deepEqual(markAllAdded(0), []);
+  assert.deepEqual(markAllAdded(-1), []);
+});
+
+test('nothing in an untracked file is ever modified', () => {
+  // Modified means "this replaced a line in HEAD". There is no HEAD side here,
+  // so a yellow marker would claim something that did not happen.
+  assert.ok(markAllAdded(50).every((m) => m.type === 'added'));
+});
+
+test('untracked marks reach the gutter as one marker per line', () => {
+  const state = docOf(4);
+  const set = buildMarkers(markAllAdded(state.doc.lines), state.doc);
+  const found: number[] = [];
+  set.between(0, state.doc.length, (from) => {
+    found.push(from);
+  });
+  assert.deepEqual(
+    found,
+    [1, 2, 3, 4].map((n) => state.doc.line(n).from)
+  );
 });
 
 // --- markerForRange: the collapsed-block regression --------------------------
